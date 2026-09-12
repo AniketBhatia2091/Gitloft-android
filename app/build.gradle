@@ -1,0 +1,99 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.serialization'
+}
+
+android {
+    compileSdk 34
+    namespace "com.example.gitloftandroid"
+
+    defaultConfig {
+        applicationId "com.example.gitloftandroid"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+        manifestPlaceholders = [appAuthRedirectScheme: "gitloft"]
+
+        buildConfigField "String", "SUPABASE_URL", "\"${project.findProperty('SUPABASE_URL')?.trim() ?: 'https://skqiulskkduazrbnsnze.supabase.co'}\""
+        buildConfigField "String", "SUPABASE_ANON_KEY", "\"${project.findProperty('SUPABASE_ANON_KEY')?.trim() ?: 'sb_publishable_Vw6w3q-hCd4pYsh95zIoPw_XofTZ7f7'}\""
+        buildConfigField "String", "GITHUB_OAUTH_CLIENT_ID", "\"${project.findProperty('GITHUB_OAUTH_CLIENT_ID')?.trim() ?: 'Ov23liFIjOqCbBZmhvy9'}\""
+        buildConfigField "String", "WEB_BASE_URL", "\"${project.findProperty('WEB_BASE_URL')?.trim() ?: 'https://gitloft.vercel.app'}\""
+    }
+
+    buildFeatures {
+        compose true
+        buildConfig true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            // debug settings
+        }
+    }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion compose_compiler_version
+    }
+
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+}
+
+dependencies {
+    // Material Components (provides Theme.Material3.* XML base themes)
+    implementation "com.google.android.material:material:1.11.0"
+
+    // Jetpack Compose
+    implementation "androidx.activity:activity-compose:$activity_version"
+    implementation "androidx.compose.ui:ui:$compose_version"
+    implementation "androidx.compose.material3:material3:1.2.1"
+    implementation "androidx.compose.ui:ui-tooling-preview:$compose_version"
+    implementation "androidx.lifecycle:lifecycle-runtime-ktx:$lifecycle_version"
+    implementation "androidx.lifecycle:lifecycle-runtime-compose:$lifecycle_version"
+    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:$lifecycle_version"
+    implementation "androidx.activity:activity-ktx:$activity_version"
+
+    // Navigation Compose
+    implementation "androidx.navigation:navigation-compose:$nav_version"
+
+    // Retrofit and kotlinx.serialization
+    implementation "com.squareup.retrofit2:retrofit:$retrofit_version"
+    implementation "com.squareup.retrofit2:converter-kotlinx-serialization:$retrofit_version"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3"
+
+    // Kotlin coroutines
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
+    implementation "net.openid:appauth:0.11.1"
+
+    // Lifecycle
+    implementation "androidx.lifecycle:lifecycle-livedata-ktx:$lifecycle_version"
+
+    // Timber for logging
+    implementation "com.jakewharton.timber:timber:5.0.1"
+
+    // For secure storage (EncryptedSharedPreferences)
+    implementation "androidx.security:security-crypto:1.1.0-alpha06"
+
+    // Chrome Custom Tabs for in-app OAuth
+    implementation "androidx.browser:browser:1.8.0"
+
+    // For loading images
+    implementation "io.coil-kt:coil-compose:2.5.0"
+
+    // For Material Design icons
+    implementation "androidx.compose.material:material-icons-extended:$compose_version"
+
+    // ZXing for QR code generation
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+
+    // Testing
+    testImplementation 'junit:junit:4.13.2'
+}
