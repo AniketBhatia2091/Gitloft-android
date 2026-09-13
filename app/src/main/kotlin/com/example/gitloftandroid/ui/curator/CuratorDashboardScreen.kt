@@ -328,7 +328,8 @@ fun CuratorHomeScreen(
                         title = "Authorize with GitHub",
                         icon = Icons.Default.Code,
                         onClick = {
-                            val authUrl = "${BuildConfig.SUPABASE_URL}/auth/v1/authorize?provider=github&redirect_to=gitloft://oauth-callback&scopes=read:user%20user:email%20repo"
+                            val encodedRedirect = android.net.Uri.encode("gitloft://oauth-callback")
+                            val authUrl = "${BuildConfig.SUPABASE_URL}/auth/v1/authorize?provider=github&redirect_to=$encodedRedirect&scopes=read:user%20user:email%20repo"
                             launchOAuthCustomTab(context, authUrl)
                         }
                     )

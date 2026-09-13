@@ -286,7 +286,8 @@ fun MainAppScreen(
                         ShowcaseScreen(
                             profile = selectedProfileForShowcase!!,
                             isRecruiterView = resolvedRole == UserRole.RECRUITER,
-                            onSelectRepo = { selectedRepoForDetail = it }
+                            onSelectRepo = { selectedRepoForDetail = it },
+                            onClose = { selectedProfileForShowcase = null }
                         )
                     }
                 }
@@ -332,7 +333,8 @@ fun MainAppScreen(
                         ShowcaseScreen(
                             profile = deepLinkProfile!!,
                             isRecruiterView = resolvedRole == UserRole.RECRUITER,
-                            onSelectRepo = { selectedRepoForDetail = it }
+                            onSelectRepo = { selectedRepoForDetail = it },
+                            onClose = onDismissDeepLink
                         )
                     } else {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

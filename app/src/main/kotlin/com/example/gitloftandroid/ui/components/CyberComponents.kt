@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -347,6 +348,7 @@ fun LiveStatusPill(
 ) {
     Row(
         modifier = modifier
+            .wrapContentWidth()
             .clip(RoundedCornerShape(4.dp))
             .background(GitloftColors.Surface)
             .border(1.dp, GitloftColors.Border, RoundedCornerShape(4.dp))
@@ -366,7 +368,8 @@ fun LiveStatusPill(
             fontSize = 9.sp,
             color = if (isLive) GitloftColors.Volt else GitloftColors.TextSecondary,
             maxLines = 1,
-            softWrap = false
+            softWrap = false,
+            overflow = TextOverflow.Clip
         )
     }
 }

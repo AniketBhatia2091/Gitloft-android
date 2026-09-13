@@ -711,7 +711,8 @@ fun AuthSheet(
                                     title = "Continue with GitHub",
                                     icon = Icons.Default.Code,
                                     onClick = {
-                                        val authUrl = "${BuildConfig.SUPABASE_URL}/auth/v1/authorize?provider=github&redirect_to=gitloft://oauth-callback&scopes=read:user%20user:email%20repo"
+                                        val encodedRedirect = Uri.encode("gitloft://oauth-callback")
+                                        val authUrl = "${BuildConfig.SUPABASE_URL}/auth/v1/authorize?provider=github&redirect_to=$encodedRedirect&scopes=read:user%20user:email%20repo"
                                         launchOAuthCustomTab(context, authUrl)
                                         onDismiss()
                                     }
@@ -721,7 +722,8 @@ fun AuthSheet(
                                     title = "Continue with Google",
                                     icon = Icons.Default.AccountCircle,
                                     onClick = {
-                                        val authUrl = "${BuildConfig.SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=gitloft://oauth-callback"
+                                        val encodedRedirect = Uri.encode("gitloft://oauth-callback")
+                                        val authUrl = "${BuildConfig.SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=$encodedRedirect"
                                         launchOAuthCustomTab(context, authUrl)
                                         onDismiss()
                                     }
