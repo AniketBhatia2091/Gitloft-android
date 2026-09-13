@@ -52,10 +52,140 @@ class SupabaseClient private constructor(private val context: Context) {
         isLenient = true
     }
 
-    private val okHttpClient = OkHttpClient.Builder()
+    private val rawOkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
+
+    private val okHttpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .addInterceptor { chain ->
+            val originalRequest = chain.request()
+            val url = originalRequest.url.toString()
+
+            // Skip interceptor for auth token/signup/recover endpoints to prevent recursion
+            if (url.contains("/auth/v1/token") || url.contains("/auth/v1/signup") || url.contains("/auth/v1/recover")) {
+                return@addInterceptor chain.proceed(originalRequest)
+            }
+
+            val currentJwt = tokenStorage.getSupabaseJwt()
+            val authHeader = originalRequest.header("Authorization")
+
+            // If request uses our Supabase JWT and it's expired or about to expire in 60s, refresh proactively
+            if (!currentJwt.isNullOrBlank() && currentJwt != "demo_mode" && authHeader?.contains(currentJwt) == true) {
+                if (tokenStorage.isSupabaseTokenExpired(bufferSeconds = 60)) {
+                    val refreshedJwt = refreshSessionBlocking(force = false)
+                    if (!refreshedJwt.isNullOrBlank() && refreshedJwt != currentJwt) {
+                        val newRequest = originalRequest.newBuilder()
+                            .header("Authorization", "Bearer $refreshedJwt")
+                            .build()
+                        return@addInterceptor chain.proceed(newRequest)
+                    }
+                }
+            }
+
+            chain.proceed(originalRequest)
+        }
+        .authenticator { _, response ->
+            if (responseCount(response) >= 3) return@authenticator null
+
+            val originalRequest = response.request
+            val url = originalRequest.url.toString()
+            if (url.contains("/auth/v1/token") || url.contains("/auth/v1/signup") || url.contains("/auth/v1/recover")) {
+                return@authenticator null
+            }
+
+            val currentJwt = tokenStorage.getSupabaseJwt()
+            val refreshToken = tokenStorage.getSupabaseRefreshToken()
+
+            if (!refreshToken.isNullOrBlank()) {
+                val newJwt = refreshSessionBlocking(force = true)
+                if (!newJwt.isNullOrBlank() && newJwt != currentJwt) {
+                    return@authenticator originalRequest.newBuilder()
+                        .header("Authorization", "Bearer $newJwt")
+                        .build()
+                }
+            }
+            null
+        }
+        .build()
+
+    private fun responseCount(response: okhttp3.Response): Int {
+        var count = 1
+        var prior = response.priorResponse
+        while (prior != null) {
+            count++
+            prior = prior.priorResponse
+        }
+        return count
+    }
+
+    @Synchronized
+    fun refreshSessionBlocking(force: Boolean = false): String? {
+        val currentJwt = tokenStorage.getSupabaseJwt()
+        if (!force && !tokenStorage.isSupabaseTokenExpired(bufferSeconds = 30)) {
+            return currentJwt
+        }
+
+        val refreshToken = tokenStorage.getSupabaseRefreshToken()
+        if (refreshToken.isNullOrBlank()) {
+            return null
+        }
+
+        return executeRefreshTokenCall(refreshToken)
+    }
+
+    suspend fun ensureValidSession(force: Boolean = false): String? = withContext(Dispatchers.IO) {
+        refreshSessionBlocking(force)
+    }
+
+    private fun executeRefreshTokenCall(refreshToken: String): String? {
+        return try {
+            val payload = buildJsonObject {
+                put("refresh_token", refreshToken)
+            }
+            val request = Request.Builder()
+                .url("$projectUrl/auth/v1/token?grant_type=refresh_token")
+                .addHeader("apikey", apiKey)
+                .addHeader("Content-Type", "application/json")
+                .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+
+            val response = rawOkHttpClient.newCall(request).execute()
+            val body = response.body?.string() ?: ""
+
+            if (response.isSuccessful) {
+                val obj = json.parseToJsonElement(body).jsonObject
+                val newAccessToken = obj["access_token"]?.jsonPrimitive?.contentOrNull
+                val newRefreshToken = obj["refresh_token"]?.jsonPrimitive?.contentOrNull
+                val expiresIn = obj["expires_in"]?.jsonPrimitive?.longOrNull
+                val expiresAt = obj["expires_at"]?.jsonPrimitive?.longOrNull
+
+                if (!newAccessToken.isNullOrBlank()) {
+                    tokenStorage.saveSupabaseSession(
+                        accessToken = newAccessToken,
+                        refreshToken = newRefreshToken ?: refreshToken,
+                        expiresInSeconds = expiresIn,
+                        expiresAtEpochSeconds = expiresAt
+                    )
+                    android.util.Log.d("SupabaseClient", "Supabase token refreshed successfully (expiresIn: ${expiresIn}s)")
+                    newAccessToken
+                } else {
+                    null
+                }
+            } else {
+                android.util.Log.w("SupabaseClient", "Supabase token refresh failed with HTTP ${response.code}: $body")
+                if (response.code == 400 || response.code == 401) {
+                    tokenStorage.clearSupabaseSession()
+                }
+                null
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("SupabaseClient", "Exception during Supabase token refresh", e)
+            null
+        }
+    }
 
     private val projectUrl: String
         get() = BuildConfig.SUPABASE_URL.trimEnd('/')
@@ -456,6 +586,7 @@ class SupabaseClient private constructor(private val context: Context) {
     }
 
     suspend fun fetchCurrentUserDetails(): SupabaseUser = withContext(Dispatchers.IO) {
+        ensureValidSession(force = false)
         val jwt = tokenStorage.getSupabaseJwt() ?: apiKey
         val request = Request.Builder()
             .url("$projectUrl/auth/v1/user")
@@ -517,12 +648,20 @@ class SupabaseClient private constructor(private val context: Context) {
             .post(payload.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
-        val response = okHttpClient.newCall(request).execute()
+        val response = rawOkHttpClient.newCall(request).execute()
         val body = response.body?.string() ?: ""
         if (response.isSuccessful) {
             val obj = json.parseToJsonElement(body).jsonObject
             val token = obj["access_token"]?.jsonPrimitive?.contentOrNull ?: throw IOException("Missing access token")
-            tokenStorage.saveSupabaseJwt(token)
+            val refreshToken = obj["refresh_token"]?.jsonPrimitive?.contentOrNull
+            val expiresIn = obj["expires_in"]?.jsonPrimitive?.longOrNull
+            val expiresAt = obj["expires_at"]?.jsonPrimitive?.longOrNull
+            tokenStorage.saveSupabaseSession(
+                accessToken = token,
+                refreshToken = refreshToken,
+                expiresInSeconds = expiresIn,
+                expiresAtEpochSeconds = expiresAt
+            )
             return@withContext token
         }
         val errorDesc = try {
@@ -547,13 +686,21 @@ class SupabaseClient private constructor(private val context: Context) {
             .post(payload.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
-        val response = okHttpClient.newCall(request).execute()
+        val response = rawOkHttpClient.newCall(request).execute()
         val body = response.body?.string() ?: ""
         if (response.isSuccessful) {
             val obj = json.parseToJsonElement(body).jsonObject
             val token = obj["access_token"]?.jsonPrimitive?.contentOrNull
+            val refreshToken = obj["refresh_token"]?.jsonPrimitive?.contentOrNull
+            val expiresIn = obj["expires_in"]?.jsonPrimitive?.longOrNull
+            val expiresAt = obj["expires_at"]?.jsonPrimitive?.longOrNull
             if (!token.isNullOrBlank()) {
-                tokenStorage.saveSupabaseJwt(token)
+                tokenStorage.saveSupabaseSession(
+                    accessToken = token,
+                    refreshToken = refreshToken,
+                    expiresInSeconds = expiresIn,
+                    expiresAtEpochSeconds = expiresAt
+                )
                 return@withContext SignUpResult.Authenticated(token)
             }
             return@withContext SignUpResult.ConfirmationRequired(email)
@@ -579,7 +726,7 @@ class SupabaseClient private constructor(private val context: Context) {
             .post(payload.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
-        val response = okHttpClient.newCall(request).execute()
+        val response = rawOkHttpClient.newCall(request).execute()
         val body = response.body?.string() ?: ""
         if (!response.isSuccessful) {
             val errorDesc = try {
@@ -600,15 +747,16 @@ class SupabaseClient private constructor(private val context: Context) {
                     .addHeader("Authorization", "Bearer $jwt")
                     .post("{}".toRequestBody("application/json".toMediaType()))
                     .build()
-                okHttpClient.newCall(request).execute()
+                rawOkHttpClient.newCall(request).execute()
             }
         } catch (e: Exception) {
             // Ignore logout network errors
+        } finally {
+            tokenStorage.clearSupabaseSession()
         }
     }
 
     private fun makeEmptyWeeklyCounts(): List<DailyEventCount> {
-        val cal = Calendar.getInstance()
         val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val result = mutableListOf<DailyEventCount>()
         for (i in 6 downTo 0) {

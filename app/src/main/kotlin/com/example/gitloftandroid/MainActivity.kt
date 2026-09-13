@@ -90,6 +90,9 @@ class MainActivity : ComponentActivity() {
             val params = parseUrlParams(rawData)
             val ghToken = params["provider_token"]
             val sbJwt = params["access_token"]
+            val sbRefreshToken = params["refresh_token"]
+            val expiresIn = params["expires_in"]?.toLongOrNull()
+            val expiresAt = params["expires_at"]?.toLongOrNull()
             val oauthError = params["error_description"] ?: params["error"]
 
             if (!oauthError.isNullOrBlank()) {
@@ -105,7 +108,12 @@ class MainActivity : ComponentActivity() {
                 tokenStorage.saveGitHubToken(ghToken)
             }
             if (!sbJwt.isNullOrBlank()) {
-                tokenStorage.saveSupabaseJwt(sbJwt)
+                tokenStorage.saveSupabaseSession(
+                    accessToken = sbJwt,
+                    refreshToken = sbRefreshToken,
+                    expiresInSeconds = expiresIn,
+                    expiresAtEpochSeconds = expiresAt
+                )
             }
             sessionViewModel.checkAuth()
             return

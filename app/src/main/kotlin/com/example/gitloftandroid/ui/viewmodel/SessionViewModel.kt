@@ -61,6 +61,14 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
     fun checkAuth() {
         viewModelScope.launch {
+            if (tokenStorage.isSupabaseTokenExpired(bufferSeconds = 60)) {
+                try {
+                    supabaseClient.ensureValidSession(force = false)
+                } catch (e: Exception) {
+                    android.util.Log.w("SessionViewModel", "Session refresh during checkAuth failed: ${e.message}")
+                }
+            }
+
             val hasGitHubToken = !tokenStorage.getGitHubToken().isNullOrBlank()
             val hasSupabaseToken = !tokenStorage.getSupabaseJwt().isNullOrBlank()
 
@@ -342,7 +350,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             try { supabaseClient.signOut() } catch (e: Exception) { }
             tokenStorage.clearGitHubToken()
-            tokenStorage.clearSupabaseJwt()
+            tokenStorage.clearSupabaseSession()
             tokenStorage.clearProfileUsername()
             localDataStore.saveStoredRepos(emptyList())
             localDataStore.setCachedRole(null)
