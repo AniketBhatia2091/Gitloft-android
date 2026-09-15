@@ -210,7 +210,7 @@ fun CuratorHomeScreen(
     var showProGateDialog by remember { mutableStateOf(false) }
 
     val username = currentUser?.login ?: "username"
-    val webUrl = "https://gitloft.vercel.app/u/$username"
+    val webUrl = "${BuildConfig.WEB_BASE_URL}/u/$username"
 
     // Language DNA
     val languageCounts = remember(allRepos) {

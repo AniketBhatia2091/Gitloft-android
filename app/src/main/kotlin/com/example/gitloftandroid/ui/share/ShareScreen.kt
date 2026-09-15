@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.gitloftandroid.BuildConfig
 import com.example.gitloftandroid.ui.components.CyberBentoPanel
 import com.example.gitloftandroid.ui.components.PrimaryCyberButton
 import com.example.gitloftandroid.ui.components.ScreenHeroHeader
@@ -47,8 +48,8 @@ fun ShareScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val fullUrl = "https://gitloft.vercel.app/u/$username"
-    val displayUrl = "gitloft.app/u/$username"
+    val fullUrl = "${BuildConfig.WEB_BASE_URL}/u/$username"
+    val displayUrl = "gitloft-app.vercel.app/u/$username"
 
     val qrBitmap = remember(fullUrl) {
         generateQRCodeBitmap(fullUrl, 512)

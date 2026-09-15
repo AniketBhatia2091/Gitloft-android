@@ -41,7 +41,16 @@
                 <data android:scheme="gitloft" android:host="home"/>
             </intent-filter>
 
-            <!-- Universal Web Deep Links: https://gitloft.vercel.app/u/* -->
+            <!-- Universal Web Deep Links: https://gitloft-app.vercel.app/u/* & https://gitloft.vercel.app/u/* -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="gitloft-app.vercel.app"
+                    android:pathPrefix="/u/"/>
+            </intent-filter>
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -52,7 +61,16 @@
                     android:pathPrefix="/u/"/>
             </intent-filter>
 
-            <!-- Universal Web OAuth Callback: https://gitloft.vercel.app/oauth-callback -->
+            <!-- Universal Web OAuth Callback: https://gitloft-app.vercel.app/oauth-callback & https://gitloft.vercel.app/oauth-callback -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="gitloft-app.vercel.app"
+                    android:path="/oauth-callback"/>
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>

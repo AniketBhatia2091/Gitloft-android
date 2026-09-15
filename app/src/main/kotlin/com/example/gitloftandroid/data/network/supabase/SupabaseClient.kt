@@ -674,6 +674,44 @@ class SupabaseClient private constructor(private val context: Context) {
         throw IOException(errorDesc ?: "Login failed (${response.code})")
     }
 
+    suspend fun exchangeCodeForSession(authCode: String): Pair<String, String?> = withContext(Dispatchers.IO) {
+        val payload = buildJsonObject {
+            put("auth_code", authCode)
+            put("code", authCode)
+        }
+
+        val request = Request.Builder()
+            .url("$projectUrl/auth/v1/token?grant_type=pkce")
+            .addHeader("apikey", apiKey)
+            .post(payload.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+
+        val response = rawOkHttpClient.newCall(request).execute()
+        val body = response.body?.string() ?: ""
+        if (response.isSuccessful) {
+            val obj = json.parseToJsonElement(body).jsonObject
+            val token = obj["access_token"]?.jsonPrimitive?.contentOrNull ?: throw IOException("Missing access token")
+            val refreshToken = obj["refresh_token"]?.jsonPrimitive?.contentOrNull
+            val expiresIn = obj["expires_in"]?.jsonPrimitive?.longOrNull
+            val expiresAt = obj["expires_at"]?.jsonPrimitive?.longOrNull
+            tokenStorage.saveSupabaseSession(
+                accessToken = token,
+                refreshToken = refreshToken,
+                expiresInSeconds = expiresIn,
+                expiresAtEpochSeconds = expiresAt
+            )
+            return@withContext Pair(token, refreshToken)
+        }
+        val errorDesc = try {
+            val jsonObj = json.parseToJsonElement(body).jsonObject
+            jsonObj["error_description"]?.jsonPrimitive?.contentOrNull
+                ?: jsonObj["msg"]?.jsonPrimitive?.contentOrNull
+                ?: jsonObj["message"]?.jsonPrimitive?.contentOrNull
+                ?: jsonObj["error"]?.jsonPrimitive?.contentOrNull
+        } catch (e: Exception) { null }
+        throw IOException(errorDesc ?: "Code exchange failed (${response.code})")
+    }
+
     suspend fun signUpWithEmail(email: String, pass: String): SignUpResult = withContext(Dispatchers.IO) {
         val payload = buildJsonObject {
             put("email", email)

@@ -19,7 +19,7 @@ android {
         buildConfigField "String", "SUPABASE_URL", "\"${project.findProperty('SUPABASE_URL')?.trim() ?: 'https://skqiulskkduazrbnsnze.supabase.co'}\""
         buildConfigField "String", "SUPABASE_ANON_KEY", "\"${project.findProperty('SUPABASE_ANON_KEY')?.trim() ?: 'sb_publishable_Vw6w3q-hCd4pYsh95zIoPw_XofTZ7f7'}\""
         buildConfigField "String", "GITHUB_OAUTH_CLIENT_ID", "\"${project.findProperty('GITHUB_OAUTH_CLIENT_ID')?.trim() ?: 'Ov23liFIjOqCbBZmhvy9'}\""
-        buildConfigField "String", "WEB_BASE_URL", "\"${project.findProperty('WEB_BASE_URL')?.trim() ?: 'https://gitloft.vercel.app'}\""
+        buildConfigField "String", "WEB_BASE_URL", "\"${project.findProperty('WEB_BASE_URL')?.trim() ?: 'https://gitloft-app.vercel.app'}\""
     }
 
     buildFeatures {

@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import com.example.gitloftandroid.data.model.GitHubRepo
 import com.example.gitloftandroid.data.model.ShowcaseProfile
 import com.example.gitloftandroid.data.model.UserRole
@@ -55,6 +56,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private var deepLinkUsernameState = mutableStateOf<String?>(null)
+    private var lastProcessedOAuthUri: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,18 +81,36 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIncomingIntent(intent: Intent?) {
         val data: Uri = intent?.data ?: return
+        val uriString = data.toString()
 
-        // Handle gitloft://oauth-callback or https://gitloft.vercel.app/oauth-callback
+        // Deduplication: prevent processing the same OAuth callback URI multiple times
+        if (uriString == lastProcessedOAuthUri) {
+            android.util.Log.d("GitloftOAuth", "Ignoring duplicate OAuth callback: $uriString")
+            return
+        }
+
+        // Handle gitloft://oauth-callback or https://gitloft-app.vercel.app/oauth-callback or https://gitloft.vercel.app/oauth-callback
         val isOAuthCallback = (data.scheme == "gitloft" && data.host == "oauth-callback") ||
-                (data.host == "gitloft.vercel.app" && (data.path == "/oauth-callback" || (data.fragment != null && data.fragment!!.contains("access_token"))))
+                ((data.host == "gitloft-app.vercel.app" || data.host == "gitloft.vercel.app") &&
+                 (data.path == "/oauth-callback" || (data.fragment != null && data.fragment!!.contains("access_token"))))
 
         if (isOAuthCallback) {
-            android.util.Log.d("GitloftOAuth", "Received OAuth callback: $data")
-            val rawData = data.fragment ?: data.query ?: data.encodedFragment ?: data.encodedQuery ?: ""
-            val params = parseUrlParams(rawData)
+            lastProcessedOAuthUri = uriString
+            intent.data = null
+
+            android.util.Log.d("GitloftOAuth", "Received OAuth callback URI: $uriString")
+            android.util.Log.d("GitloftOAuth", "OAuth Query: ${data.query}")
+            android.util.Log.d("GitloftOAuth", "OAuth Fragment: ${data.fragment}")
+
+            val queryParams = parseUrlParams(data.query ?: data.encodedQuery ?: "")
+            val fragmentParams = parseUrlParams(data.fragment ?: data.encodedFragment ?: "")
+            val params = queryParams + fragmentParams
+            android.util.Log.d("GitloftOAuth", "OAuth parsed keys: ${params.keys}")
+
             val ghToken = params["provider_token"]
             val sbJwt = params["access_token"]
             val sbRefreshToken = params["refresh_token"]
+            val authCode = params["code"] ?: params["auth_code"]
             val expiresIn = params["expires_in"]?.toLongOrNull()
             val expiresAt = params["expires_at"]?.toLongOrNull()
             val oauthError = params["error_description"] ?: params["error"]
@@ -114,14 +134,31 @@ class MainActivity : ComponentActivity() {
                     expiresInSeconds = expiresIn,
                     expiresAtEpochSeconds = expiresAt
                 )
+                sessionViewModel.checkAuth()
+            } else if (!authCode.isNullOrBlank()) {
+                android.util.Log.d("GitloftOAuth", "Received auth code, exchanging via SupabaseClient: $authCode")
+                lifecycleScope.launch {
+                    try {
+                        val client = com.example.gitloftandroid.data.network.supabase.SupabaseClient.getInstance(this@MainActivity)
+                        client.exchangeCodeForSession(authCode)
+                        sessionViewModel.checkAuth()
+                    } catch (e: Exception) {
+                        android.util.Log.e("GitloftOAuth", "Code exchange failed", e)
+                        val msg = e.message ?: "Code exchange failed"
+                        android.widget.Toast.makeText(this@MainActivity, "Auth Failed: $msg", android.widget.Toast.LENGTH_LONG).show()
+                        sessionViewModel.setAuthError(msg)
+                    }
+                }
+            } else {
+                sessionViewModel.checkAuth()
             }
-            sessionViewModel.checkAuth()
             return
         }
 
         // Handle gitloft://home
         if (data.scheme == "gitloft" && data.host == "home") {
             sessionViewModel.navigateHomeFromDeepLink()
+            intent.data = null
             return
         }
 
@@ -130,15 +167,17 @@ class MainActivity : ComponentActivity() {
             val username = data.pathSegments.firstOrNull()
             if (!username.isNullOrBlank()) {
                 deepLinkUsernameState.value = username
+                intent.data = null
                 return
             }
         }
 
-        // Handle https://gitloft.vercel.app/u/{username}
-        if (data.host == "gitloft.vercel.app") {
+        // Handle https://gitloft-app.vercel.app/u/{username} or https://gitloft.vercel.app/u/{username}
+        if (data.host == "gitloft-app.vercel.app" || data.host == "gitloft.vercel.app") {
             val parts = data.pathSegments
             if (parts.size >= 2 && parts[0] == "u") {
                 deepLinkUsernameState.value = parts[1]
+                intent.data = null
             }
         }
     }
